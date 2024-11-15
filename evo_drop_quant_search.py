@@ -21,8 +21,6 @@ from src.data_utils import get_data
 from src.common_utils import fix_seed
 from src.model_utils import (
     get_layers,
-    get_attn_layer_name,
-    get_mlp_layer_name,
     make_dummy_forward,
     dummy_initialize,
     restore_forward,
@@ -43,7 +41,7 @@ def load_states(model, layers, layer_names, drop_state, quant_state, quant_weigh
             if new_level != old_level:
                 for layer_name in layer_names:
                     layer = model.get_submodule(layer_name)
-                    if layer_name.startswith(f"model.layers\.{i}\."):
+                    if layer_name.startswith(f"model.layers.{i}."):
                         layer.weight.data = torch.load(
                             os.path.join(quant_weights_path, layer_name, f"{new_level}.pth"),
                             map_location=layer.weight.device,
@@ -150,7 +148,7 @@ def parse_args():
     # Quantization params
     parser.add_argument(
         "--target_bitwidth",
-        type=float,
+        type=int,
         required=True,
         help="Base level for all layers. If no integer, initialize random with this average",
     )
@@ -495,13 +493,16 @@ def main():
     if args.save_dir:
         os.makedirs(args.save_dir, exist_ok=True)
         # Save layer drop config
-        with open(os.path.join(args.save_dir, "layer_drop_and_quant_config.txt"), "w") as f:
+        config_name = (
+            f"{args.model_name_or_path.split('/')[-1]}_0_{round(100 * args.sparsity)}_{args.target_bitwidth}bit.txt"
+        )
+        with open(os.path.join(args.save_dir, config_name), "w") as f:
             for i, (is_dropped, b) in enumerate(zip(final_drop_state, final_quant_state)):
-                f.write(f"model.blocks.{i}: ({is_dropped}, {b})\n")
+                f.write(f"model.blocks.{i},{is_dropped},{b}\n")
 
     print("Final configuration:")
     for i, (is_dropped, b) in enumerate(zip(final_drop_state, final_quant_state)):
-        print(f"model.blocks.{i}: ({is_dropped}, {b})\n")
+        print(f"model.blocks.{i}\tDropped: {is_dropped}\tBitwidth:{b}\n")
 
     # Final evaluation
     for eval_dataset_name, eval_dataset in zip(args.eval_datasets, eval_datasets):

@@ -395,7 +395,7 @@ def main():
         print(f"Train fitness {train_fitnesses[0]:.2e}")
 
         for parent in population:
-            print(f"Parent: attn: {[int(ele) for ele in parent["attn"]]} mlp: {[int(ele) for ele in parent["mlp"]]}")
+            print(f"Parent: attn: {[int(ele) for ele in parent['attn']]} mlp: {[int(ele) for ele in parent['mlp']]}")
 
         load_states(model, layers, population[0], args.drop_two_consecutive)
         log_dict["train_fitness"] = train_fitnesses[0]

@@ -135,11 +135,11 @@ def get_data(
         data = torch.load(data_name_or_path)[:num_tokens // sequence_length]  # load data
         data = [sample[:, :sequence_length] for sample in data]  # trim to sequence length
     elif data_name_or_path == "wikitext2":
-        data = get_wikitext2(num_tokens // sequence_length, sequence_length, tokenizer, train) # 
+        data = get_wikitext2(num_tokens // sequence_length, sequence_length, tokenizer, train) 
     elif data_name_or_path == "c4":
         data = get_c4(num_tokens // sequence_length, sequence_length, tokenizer, train)
     elif data_name_or_path == "fineweb_edu":
-        data = get_fineweb_edu(num_tokens, sequence_length, tokenizer)
+        data = get_fineweb_edu(num_tokens, sequence_length, tokenizer, train)
     else:
         print(data_name_or_path)
         raise ValueError("Unknown dataset.")

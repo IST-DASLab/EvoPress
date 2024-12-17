@@ -47,22 +47,28 @@ torchrun --nnodes=1 --nproc-per-node=<NUM_GPU> <name_of_the_script.py> <args...>
 ### Depth pruning
 ---
 
-We provide 3 scripts for depth pruning:
+We provide 3 versions for depth pruning:
 * `evo_drop_search.py` — depth pruning via EvoPress
 * `drop_scoring.py` — depth pruning via scoring methods
 * `brute_force_drop.py` — depth pruning via brute force
 
+To run EvoPress for depth pruning, execute `run_drop_search.sh` in the scripts folder.
+
 ### Unstructured Sparsity
 ---
 
-We provide 2 scripts for unstructured pruning:
+We provide 2 version for unstructured pruning:
 * `prune.py` —  SparseGPT unstructured pruning (preparation of database for EvoPress)
 * `owl_prune.py` — SparseGPT unstructured pruning (preparation of database for OWL)
+
+To run EvoPress for non-uniform unstructured pruning, first execute `run_sparse_gpt.sh` to generate the database and then `run_prune_search.sh` for the search.
 
 ### Quantization
 ---
 
 We provide `quant.py` for producing the GPTQ database for EvoPress.
+
+To run EvoPress for non-uniform quantization, first execute `run_gptq.sh` to generate the database and then `run_quant_search.sh` for the search.
 
 ### Evaluation
 ---

@@ -9,6 +9,7 @@ GROUP_SIZE=128
 
 SAVE_DIR="/path/to/your/data/folder"  # Modify this path to point to your local folder (will be used by quant_search.sh)
 
+# For Llama models, the pre_block_modules should be "model.embed_tokens model.rotary_emb"
 torchrun --nnodes=1 --nproc-per-node=8 --master_port 29501 quant.py \
     \
     --model_name_or_path $MODEL \

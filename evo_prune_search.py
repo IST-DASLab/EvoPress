@@ -253,8 +253,6 @@ def main():
         # Evaluate current search point
         if generation % args.eval_every == 0:
             for eval_dataset_name, eval_dataset in zip(args.eval_datasets, eval_datasets):
-                if eval_dataset_name != "fineweb_edu":
-                    continue
                 ppl_eval = compute_perplexity(model, eval_dataset)
                 print(f"{eval_dataset_name}: {ppl_eval:.2f}")
                 log_dict[f"ppl_eval/{eval_dataset_name}"] = ppl_eval

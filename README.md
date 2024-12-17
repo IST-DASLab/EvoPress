@@ -7,7 +7,7 @@ Code for paper [EvoPress: Towards Optimal Dynamic Model Compression via Evolutio
 ### Repository structure
 ---
 
-- ```example_scripts/``` —  contains bash scripts with the required arguments to run the method
+- ```scripts/``` —  contains bash scripts with the required arguments to run the method
 - ```src/``` —  directory for helper methods and utility functions 
 - ```evo_drop_search.py``` — evolutionary depth pruning 
 - ```drop_scoring.py``` — scoring based baseline methods for depth pruning 

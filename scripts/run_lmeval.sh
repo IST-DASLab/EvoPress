@@ -1,5 +1,5 @@
 MODEL="Mistral-7B"
-COMPR_PATH="/nfs/scistore19/alistgrp/osieberl/writeup/Optimal-Procrustes/gptq_models/fineweb_edu/Mistral-7B-v0.3/4" #"/path/to/your/data/folder"  # Modify this path to point to your local folder 
+COMPR_PATH="/path/to/your/data/folder"  # Modify this path to point to your local folder 
 DEFAULT_LEVEL=4 # all layers quantized to 4 bit
 
 if [[ $MODEL == Llama-2-7B ]]; then

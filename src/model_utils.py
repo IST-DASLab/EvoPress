@@ -368,7 +368,12 @@ def layer_order_fn(layer_name: str):
     misc = split_key[3:]
     return (block_id, *misc)
 
-def group_layers(model: nn.Module, layer_names: Sequence[str], group_rule: Optional[str] = None) -> Tuple[Sequence[str]]:
+def group_layers(
+    model: nn.Module, 
+    layer_names: Sequence[str], 
+    group_rule: Optional[str] = None, 
+    merge_groups: Optional[List[str]] = None
+) -> Tuple[Sequence[List[str]]]:
     assert group_rule in ["none", "name", "size"]
     # No grouping
     if group_rule == "none":
@@ -381,5 +386,13 @@ def group_layers(model: nn.Module, layer_names: Sequence[str], group_rule: Optio
         group_key_fn = lambda layer_name: model.get_submodule(layer_name).weight.numel()
     groups = defaultdict(list)
     for layer_name in layer_names:
-        groups[group_key_fn(layer_name)].append(layer_name)
+        groups[group_key_fn(layer_name)].append([layer_name])
+    # Merge groups
+    if merge_groups is not None:
+        assert group_rule == "name", "merge_groups is implemented only for group_rule == `name`"
+        merged_groups = {}
+        for merge_group in merge_groups:
+            merged_group_keys = merge_group.split(',')
+            merged_groups[merge_group] = [sum(items, []) for items in zip(*[groups[k] for k in merged_group_keys])]
+        groups = merged_groups
     return tuple(groups.values())

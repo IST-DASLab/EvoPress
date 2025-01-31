@@ -26,18 +26,20 @@ from src.model_utils import layer_order_fn, group_layers
 def load_layers(
     model: AutoModelForCausalLM,
     grouped_layer_names: Tuple[Sequence[str]],
-    new_state: Tuple[Sequence[int]],
+    new_state: Tuple[List[Sequence[int]]],
     quant_weights_path: str,
 ):
     assert hasattr(model, "state")
     num_groups = len(grouped_layer_names)
     for i in range(num_groups):
-        for layer_name, new_level, old_level in zip(grouped_layer_names[i], new_state[i], model.state[i]):
+        for layer_names, new_level, old_level in zip(grouped_layer_names[i], new_state[i], model.state[i]):
             if new_level != old_level:
-                layer = model.get_submodule(layer_name)
-                layer.weight.data = torch.load(
-                    os.path.join(quant_weights_path, layer_name, f"{new_level}.pth"), map_location=layer.weight.device
-                ).to(layer.weight.dtype)
+                for layer_name in layer_names:
+                    layer = model.get_submodule(layer_name)
+                    layer.weight.data = torch.load(
+                        os.path.join(quant_weights_path, layer_name, f"{new_level}.pth"),
+                        map_location=layer.weight.device,
+                    ).to(layer.weight.dtype)
     # Update model state
     model.state = new_state
 
@@ -183,6 +185,13 @@ def parse_args():
         help="Layer grouping rule. Mutations are performed only within a group.",
     )
     parser.add_argument(
+        "--merge_groups",
+        nargs="+",
+        type=str,
+        default=None,
+        help="Groups to merge presented as a list of comma-separated strings.",
+    )
+    parser.add_argument(
         "--kl_topk",
         type=int,
         default=10,
@@ -290,7 +299,7 @@ def main():
     # Sort layers
     layer_names = sorted(layer_names, key=layer_order_fn)
     # Group layers
-    grouped_layer_names = group_layers(model, layer_names, args.group_rule)
+    grouped_layer_names = group_layers(model, layer_names, args.group_rule, args.merge_groups)
     print(grouped_layer_names)
     num_groups = len(grouped_layer_names)
     # Loaded state
@@ -299,9 +308,10 @@ def main():
     target_bits = 0
     quantizable_weights = 0
     for group_id in range(len(grouped_layer_names)):
-        for i, layer_name in enumerate(grouped_layer_names[group_id]):
-            target_bits += int(model.get_submodule(layer_name).weight.numel() * args.target_bitwidth)
-            quantizable_weights += model.get_submodule(layer_name).weight.numel()
+        for i, layer_names in enumerate(grouped_layer_names[group_id]):
+            for layer_name in layer_names:
+                target_bits += int(model.get_submodule(layer_name).weight.numel() * args.target_bitwidth)
+                quantizable_weights += model.get_submodule(layer_name).weight.numel()
 
     # Initialization
     if (
@@ -355,8 +365,9 @@ def main():
 
     parent_bits = 0
     for group_id in range(len(grouped_layer_names)):
-        for i, layer_name in enumerate(grouped_layer_names[group_id]):
-            parent_bits += model.get_submodule(layer_name).weight.numel() * parent[group_id][i]
+        for i, layer_names in enumerate(grouped_layer_names[group_id]):
+            for layer_name in layer_names:
+                parent_bits += model.get_submodule(layer_name).weight.numel() * parent[group_id][i]
 
     log_dict = {}
     for generation in range(args.generations):
@@ -402,18 +413,18 @@ def main():
                     group = grouped_layer_names[group_id]
 
                     incr_ids = []
-                    for i, layer_name in enumerate(group):
+                    for i, layer_names in enumerate(group):
                         level = offspring[group_id][i]
                         if os.path.exists(
-                            os.path.join(args.quant_weights_path, layer_name, f"{level + args.step_size}.pth")
+                            os.path.join(args.quant_weights_path, layer_names[0], f"{level + args.step_size}.pth")
                         ):
                             incr_ids.append(i)
                     assert len(incr_ids) > 0, "There is no way to increase compression level."
                     incr_id = random.choice(incr_ids)
 
                     offspring[group_id][incr_id] += args.step_size
-                    offspring_bits += model.get_submodule(group[incr_id]).weight.numel() * args.step_size
-                    bits_added += model.get_submodule(group[incr_id]).weight.numel() * args.step_size
+                    offspring_bits += model.get_submodule(group[incr_id][0]).weight.numel() * args.step_size
+                    bits_added += model.get_submodule(group[incr_id][0]).weight.numel() * args.step_size
 
                 number_level_changes = num_flips
                 while offspring_bits > target_bits:  # Decrease levels until target bitwidth satisfied
@@ -426,18 +437,18 @@ def main():
                     group = grouped_layer_names[group_id]
 
                     decr_ids = []
-                    for i, layer_name in enumerate(group):
+                    for i, layer_names in enumerate(group):
                         level = offspring[group_id][i]
                         if os.path.exists(
-                            os.path.join(args.quant_weights_path, layer_name, f"{level - args.step_size}.pth")
+                            os.path.join(args.quant_weights_path, layer_names[0], f"{level - args.step_size}.pth")
                         ):
                             decr_ids.append(i)
                     assert len(decr_ids) > 0, "There is no way to decrease compression level."
                     decr_id = random.choice(decr_ids)
 
                     offspring[group_id][decr_id] -= args.step_size
-                    offspring_bits -= model.get_submodule(group[decr_id]).weight.numel() * args.step_size
-                    bits_removed += model.get_submodule(group[decr_id]).weight.numel() * args.step_size
+                    offspring_bits -= model.get_submodule(group[decr_id][0]).weight.numel() * args.step_size
+                    bits_removed += model.get_submodule(group[decr_id][0]).weight.numel() * args.step_size
 
                 if number_level_changes > 10:  # Avoid too many mutations
                     continue
@@ -455,10 +466,10 @@ def main():
 
                     # Positions where compression can be decreased
                     decr_ids = []
-                    for i, layer_name in enumerate(group):
+                    for i, layer_names in enumerate(group):
                         level = offspring[group_id][i]
                         if os.path.exists(
-                            os.path.join(args.quant_weights_path, layer_name, f"{level - args.step_size}.pth")
+                            os.path.join(args.quant_weights_path, layer_names[0], f"{level - args.step_size}.pth")
                         ):
                             decr_ids.append(i)
                     assert len(decr_ids) > 0, "There is no way to decrease compression level."
@@ -468,7 +479,7 @@ def main():
                     for i, layer_name in enumerate(group):
                         level = offspring[group_id][i]
                         if os.path.exists(
-                            os.path.join(args.quant_weights_path, layer_name, f"{level + args.step_size}.pth")
+                            os.path.join(args.quant_weights_path, layer_names[0], f"{level + args.step_size}.pth")
                         ):
                             incr_ids.append(i)
                     assert len(incr_ids) > 0, "There is no way to increase compression level."
@@ -506,7 +517,9 @@ def main():
     with open(os.path.join(args.quant_weights_path, configuration_name), "w") as f:
         for i in range(num_groups):
             f.write(
-                "\n".join([f"{layer_name}: {level}" for layer_name, level in zip(grouped_layer_names[i], parent[i])])
+                "\n".join(
+                    [f"{','.join(layer_name)}: {level}" for layer_name, level in zip(grouped_layer_names[i], parent[i])]
+                )
             )
             if i != num_groups - 1:
                 f.write("\n")

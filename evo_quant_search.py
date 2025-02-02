@@ -323,7 +323,6 @@ def main():
         candidates = []
         for _ in range(args.initially_generated):
             # Start with all bitwidths rounded up and decrease bitwidths randomly until target bitwidth achieved
-
             candidate = [[math.ceil(args.target_bitwidth) for _ in names] for names in grouped_layer_names]
             candidate_bits = quantizable_weights * math.ceil(args.target_bitwidth)
 
@@ -335,17 +334,18 @@ def main():
                 group = grouped_layer_names[group_id]
 
                 decr_ids = []
-                for i, layer_name in enumerate(group):
+                for i, layer_names in enumerate(group):
                     level = candidate[group_id][i]
                     if os.path.exists(
-                        os.path.join(args.quant_weights_path, layer_name, f"{level - args.step_size}.pth")
+                        os.path.join(args.quant_weights_path, layer_names[0], f"{level - args.step_size}.pth")
                     ):
                         decr_ids.append(i)
                 assert len(decr_ids) > 0, "There is no way to decrease compression level."
                 decr_id = random.choice(decr_ids)
 
                 candidate[group_id][decr_id] -= args.step_size
-                candidate_bits -= model.get_submodule(group[decr_id]).weight.numel() * args.step_size
+                for layer_name in group[decr_id]:
+                    candidate_bits -= model.get_submodule(layer_name).weight.numel() * args.step_size
 
             candidates.append(candidate)
 

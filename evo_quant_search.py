@@ -334,33 +334,21 @@ def main():
         parent = [[int(args.target_bitwidth) for _ in names] for names in grouped_layer_names]
         train_fitness = float("inf")
     else:
-        init_level = available_bitwidths[np.searchsorted(available_bitwidths, args.target_bitwidth)]
+        init_level_id = np.searchsorted(available_bitwidths, args.target_bitwidth)
+        init_level = available_bitwidths[init_level_id]
+        prev_level = available_bitwidths[init_level_id - 1]
         candidates = []
         for _ in range(args.initially_generated):
             # Start with all bitwidths rounded up and decrease bitwidths randomly until target bitwidth achieved
             candidate = [[init_level for _ in names] for names in grouped_layer_names]
-            candidate_bits = quantizable_weights * init_level
 
-            while candidate_bits > target_bits:
-                # Select random group, proportional to the number of layers in a group
-                group_id = random.choices(
-                    range(len(grouped_layer_names)), weights=[len(g) for g in grouped_layer_names]
-                )[0]
-                group = grouped_layer_names[group_id]
+            for group_id, group in enumerate(grouped_layer_names):
+                # Get number of bits to decrease
+                num_to_decr = math.ceil(len(group) * (init_level - args.target_bitwidth) / (init_level - prev_level))
+                decr_ids = random.sample(range(len(group)), k=num_to_decr)
 
-                decr_ids = []
-                for i, layer_names in enumerate(group):
-                    level = candidate[group_id][i]
-                    if os.path.exists(
-                        os.path.join(args.quant_weights_path, layer_names[0], f"{level - step_size}.pth")
-                    ):
-                        decr_ids.append(i)
-                assert len(decr_ids) > 0, "There is no way to decrease compression level."
-                decr_id = random.choice(decr_ids)
-
-                candidate[group_id][decr_id] -= step_size
-                for layer_name in group[decr_id]:
-                    candidate_bits -= model.get_submodule(layer_name).weight.numel() * step_size
+                for decr_id in decr_ids:
+                    candidate[group_id][decr_id] -= step_size
 
             candidates.append(candidate)
 

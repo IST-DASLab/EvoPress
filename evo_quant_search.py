@@ -197,13 +197,6 @@ def parse_args():
         default=10,
         help="TopK logits in KL-divergence (for sparse_kl fitness function)",
     )
-    # TODO infer automatically from configuration
-    parser.add_argument(
-        "--step_size",
-        type=int,
-        default=1,
-        help="Step size between adjacent levels",
-    )
     # Misc params
     parser.add_argument(
         "--dtype",
@@ -300,7 +293,6 @@ def main():
     layer_names = sorted(layer_names, key=layer_order_fn)
     # Group layers
     grouped_layer_names = group_layers(model, layer_names, args.group_rule, args.merge_groups)
-    print(grouped_layer_names)
     num_groups = len(grouped_layer_names)
     # Loaded state
     model.state = [[None] * len(names) for names in grouped_layer_names]
@@ -313,18 +305,41 @@ def main():
                 target_bits += int(model.get_submodule(layer_name).weight.numel() * args.target_bitwidth)
                 quantizable_weights += model.get_submodule(layer_name).weight.numel()
 
+    # Init available_bitwidths
+    available_bitwidths = None
+    for root, dirs, files in os.walk(args.quant_weights_path):
+        # if not leaf directory escape
+        if len(dirs) > 0:
+            continue
+        available_bitwidths_for_layer = set()
+        for file in files:
+            # Assuming file has a format "<int>.pth"
+            assert file.endswith(".pth")
+            available_bitwidths_for_layer.add(int(file.split(".")[0]))
+
+        if available_bitwidths is None:
+            available_bitwidths = available_bitwidths_for_layer
+        else:
+            available_bitwidths &= available_bitwidths_for_layer
+    # Turn into sorted list
+    available_bitwidths = sorted(available_bitwidths)
+    # Check that bitwidths are equal
+    bitwidths_diffs = np.diff(np.array(available_bitwidths))
+    assert np.all(bitwidths_diffs == bitwidths_diffs[0])
+    step_size = bitwidths_diffs[0]
+
     # Initialization
-    if (
-        int(args.target_bitwidth) == args.target_bitwidth
-    ):  # TODO: What if target bitwidth is integer, but not available (e.g. 4/8 with 5bit average)
+    assert min(available_bitwidths) <= args.target_bitwidth <= max(available_bitwidths)
+    if args.target_bitwidth in available_bitwidths:
         parent = [[int(args.target_bitwidth) for _ in names] for names in grouped_layer_names]
         train_fitness = float("inf")
     else:
+        init_level = available_bitwidths[np.searchsorted(available_bitwidths, args.target_bitwidth)]
         candidates = []
         for _ in range(args.initially_generated):
             # Start with all bitwidths rounded up and decrease bitwidths randomly until target bitwidth achieved
-            candidate = [[math.ceil(args.target_bitwidth) for _ in names] for names in grouped_layer_names]
-            candidate_bits = quantizable_weights * math.ceil(args.target_bitwidth)
+            candidate = [[init_level for _ in names] for names in grouped_layer_names]
+            candidate_bits = quantizable_weights * init_level
 
             while candidate_bits > target_bits:
                 # Select random group, proportional to the number of layers in a group
@@ -337,15 +352,15 @@ def main():
                 for i, layer_names in enumerate(group):
                     level = candidate[group_id][i]
                     if os.path.exists(
-                        os.path.join(args.quant_weights_path, layer_names[0], f"{level - args.step_size}.pth")
+                        os.path.join(args.quant_weights_path, layer_names[0], f"{level - step_size}.pth")
                     ):
                         decr_ids.append(i)
                 assert len(decr_ids) > 0, "There is no way to decrease compression level."
                 decr_id = random.choice(decr_ids)
 
-                candidate[group_id][decr_id] -= args.step_size
+                candidate[group_id][decr_id] -= step_size
                 for layer_name in group[decr_id]:
-                    candidate_bits -= model.get_submodule(layer_name).weight.numel() * args.step_size
+                    candidate_bits -= model.get_submodule(layer_name).weight.numel() * step_size
 
             candidates.append(candidate)
 
@@ -416,15 +431,15 @@ def main():
                     for i, layer_names in enumerate(group):
                         level = offspring[group_id][i]
                         if os.path.exists(
-                            os.path.join(args.quant_weights_path, layer_names[0], f"{level + args.step_size}.pth")
+                            os.path.join(args.quant_weights_path, layer_names[0], f"{level + step_size}.pth")
                         ):
                             incr_ids.append(i)
                     assert len(incr_ids) > 0, "There is no way to increase compression level."
                     incr_id = random.choice(incr_ids)
 
-                    offspring[group_id][incr_id] += args.step_size
-                    offspring_bits += model.get_submodule(group[incr_id][0]).weight.numel() * args.step_size
-                    bits_added += model.get_submodule(group[incr_id][0]).weight.numel() * args.step_size
+                    offspring[group_id][incr_id] += step_size
+                    offspring_bits += model.get_submodule(group[incr_id][0]).weight.numel() * step_size
+                    bits_added += model.get_submodule(group[incr_id][0]).weight.numel() * step_size
 
                 number_level_changes = num_flips
                 while offspring_bits > target_bits:  # Decrease levels until target bitwidth satisfied
@@ -440,15 +455,15 @@ def main():
                     for i, layer_names in enumerate(group):
                         level = offspring[group_id][i]
                         if os.path.exists(
-                            os.path.join(args.quant_weights_path, layer_names[0], f"{level - args.step_size}.pth")
+                            os.path.join(args.quant_weights_path, layer_names[0], f"{level - step_size}.pth")
                         ):
                             decr_ids.append(i)
                     assert len(decr_ids) > 0, "There is no way to decrease compression level."
                     decr_id = random.choice(decr_ids)
 
-                    offspring[group_id][decr_id] -= args.step_size
-                    offspring_bits -= model.get_submodule(group[decr_id][0]).weight.numel() * args.step_size
-                    bits_removed += model.get_submodule(group[decr_id][0]).weight.numel() * args.step_size
+                    offspring[group_id][decr_id] -= step_size
+                    offspring_bits -= model.get_submodule(group[decr_id][0]).weight.numel() * step_size
+                    bits_removed += model.get_submodule(group[decr_id][0]).weight.numel() * step_size
 
                 if number_level_changes > 10:  # Avoid too many mutations
                     continue
@@ -469,7 +484,7 @@ def main():
                     for i, layer_names in enumerate(group):
                         level = offspring[group_id][i]
                         if os.path.exists(
-                            os.path.join(args.quant_weights_path, layer_names[0], f"{level - args.step_size}.pth")
+                            os.path.join(args.quant_weights_path, layer_names[0], f"{level - step_size}.pth")
                         ):
                             decr_ids.append(i)
                     assert len(decr_ids) > 0, "There is no way to decrease compression level."
@@ -479,14 +494,14 @@ def main():
                     for i, layer_name in enumerate(group):
                         level = offspring[group_id][i]
                         if os.path.exists(
-                            os.path.join(args.quant_weights_path, layer_names[0], f"{level + args.step_size}.pth")
+                            os.path.join(args.quant_weights_path, layer_names[0], f"{level + step_size}.pth")
                         ):
                             incr_ids.append(i)
                     assert len(incr_ids) > 0, "There is no way to increase compression level."
                     incr_id = random.choice(incr_ids)
 
-                    offspring[group_id][decr_id] -= args.step_size
-                    offspring[group_id][incr_id] += args.step_size
+                    offspring[group_id][decr_id] -= step_size
+                    offspring[group_id][incr_id] += step_size
 
             if offspring in offspring_list or offspring in [parent]:  # Avoid duplicates
                 continue

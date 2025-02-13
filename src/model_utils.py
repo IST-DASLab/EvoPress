@@ -342,7 +342,7 @@ def load_sparse_weights(
 ):
     # Load weights from configuration if provided
     if sparse_config_path:
-        with open(os.path.join(sparse_weights_path, sparse_config_path), "r") as f:
+        with open(sparse_config_path, "r") as f:
             for line in f:
                 layer_name, level = line.split(":")
                 layer = model.get_submodule(layer_name.strip(" "))
@@ -360,7 +360,6 @@ def load_sparse_weights(
             layer.weight.data = torch.load(
                 os.path.join(sparse_weights_path, layer_name, f"{default_level}.pth"),
             ).to(orig_dtype)
-
 
 def layer_order_fn(layer_name: str):
     split_key = layer_name.split(".")

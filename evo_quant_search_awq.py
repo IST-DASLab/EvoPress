@@ -277,10 +277,49 @@ def main():
         if os.path.isdir(os.path.join(args.quant_weights_path, layer_name)):
             layer_names.append(layer_name)
     layer_names = sorted(layer_names, key = lambda layer_name: int(layer_name.split('.')[-1]))
+
     # Loaded state
-    model.state = [None for _ in layer_names]
-    parent = [int(args.target_bitwidth) for _ in layer_names]
+    model.state = [None for _ in layer_names] 
     train_fitness = float("inf")
+
+    if args.target_bitwidth.is_integer():
+        parent = [int(args.target_bitwidth) for _ in layer_names]
+    else:
+        candidates = []
+        for _ in range(args.initially_generated):
+            # Start with all bitwidths rounded up and decrease bitwidths randomly until target bitwidth achieved
+            candidate = [math.ceil(args.target_bitwidth) for _ in layer_names]
+            candidate_avg_bits = math.ceil(args.target_bitwidth)
+
+            while candidate_avg_bits > args.target_bitwidth:
+                decr_ids = []
+                for i, layer_name in enumerate(layer_names):
+                    level = candidate[i]
+                    if os.path.exists(
+                        os.path.join(args.quant_weights_path, layer_name, f"{level - args.step_size}.pth")
+                    ):
+                        decr_ids.append(i)
+                assert len(decr_ids) > 0, "There is no way to decrease compression level."
+                decr_id = random.choice(decr_ids)
+
+                candidate_avg_bits -= args.step_size / len(layer_names)
+                candidate[decr_id] -= args.step_size
+
+            candidates.append(candidate)
+
+        candidates, train_fitnesses = selection(
+            model=model,
+            layer_names=layer_names,
+            quant_weights_path=args.quant_weights_path,
+            candidates=candidates,
+            num_survive=1,
+            calibration_data=calibration_data,
+            num_tokens=args.initial_tokens,
+            fitness_fn=args.fitness_fn,
+            target_logits=target_logits,
+        )
+        train_fitness = train_fitnesses[0]
+        parent = candidates[0]
 
     log_dict = {}
     for generation in range(args.generations):

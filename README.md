@@ -4,8 +4,6 @@
 
 Official PyTorch implementation for the paper [EvoPress: Towards Optimal Dynamic Model Compression via Evolutionary Search](https://arxiv.org/abs/2410.14649).
 
-## News
-
 ## News 🔥
 
 - [2025/05] Our paper has been accepted to ICML 2025! 🎉

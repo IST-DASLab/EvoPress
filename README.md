@@ -3,6 +3,12 @@
 <a href='https://arxiv.org/abs/2410.14649'><img src='https://img.shields.io/badge/ArXiv-PDF-red' height="25"></a> &nbsp; 
 
 Official PyTorch implementation for the paper [EvoPress: Towards Optimal Dynamic Model Compression via Evolutionary Search](https://arxiv.org/abs/2410.14649).
+
+## News
+
+## News 🔥
+
+- [2025/05] Our paper has been accepted to ICML 2025! 🎉
  
 ## Usage
 

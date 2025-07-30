@@ -353,13 +353,14 @@ def main():
         train_fitness = train_fitnesses[0]
         parent = candidates[0]
 
-    parent_bits = 0
-    for group_id in range(len(grouped_layer_names)):
-        for i, layer_name in enumerate(grouped_layer_names[group_id]):
-            parent_bits += model.get_submodule(layer_name).weight.numel() * parent[group_id][i]
 
     log_dict = {}
     for generation in range(args.generations):
+        parent_bits = 0
+        for group_id in range(len(grouped_layer_names)):
+            for i, layer_name in enumerate(grouped_layer_names[group_id]):
+                parent_bits += model.get_submodule(layer_name).weight.numel() * parent[group_id][i]
+                
         print(f"Generation {generation + 1}/{args.generations}")
         print(f"Current search point:")
         for group in parent:

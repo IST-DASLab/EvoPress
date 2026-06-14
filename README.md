@@ -97,3 +97,16 @@ lm-eval                   0.4.0                    pypi_0    pypi
 
 Scripts `prune.py`, `owl_prune.py`, `quant.py` produce several versions of compressed representation
 for each weight `(100-200 Gb)`. Make sure that you have sufficient amount of free space on drive before running. Additionally, when using KL-Divergence as the fitness function for the search, ensure you have enough RAM to store the logits, particularly for the models with 128K vocabulary size. Alternatively, we implemented TopK-KL-Divergence in `evo_quant_search.py`, which significantly reduces memory requirements. Preliminary experiments have shown this method to be comparably effective to KL-Divergence for $K \geq 512$.
+
+
+## Citation
+
+If you find EvoPress useful, please cite our paper:
+
+```bibtex
+@inproceedings{sieberling2025evopress,
+  title={EvoPress: Accurate Dynamic Model Compression via Evolutionary Search},
+  author={Sieberling, Oliver and Kuznedelev, Denis and Kurtic, Eldar and Alistarh, Dan},
+  booktitle={Proceedings of the 42nd International Conference on Machine Learning},
+  year={2025}
+}
